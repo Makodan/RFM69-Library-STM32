@@ -29,7 +29,7 @@
 // Converted to AVR environment by Zulkar Nayem
 // **********************************************************************************
 
-#include <avr/io.h>
+//#include <avr/io.h>
 
 #ifndef RFM69_h
 #define RFM69_h
