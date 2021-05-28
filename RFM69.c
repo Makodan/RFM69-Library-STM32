@@ -26,6 +26,7 @@
 
 // **********************************************************************************
 // Converted to AVR environment by Zulkar Nayem
+// The AVR environment modified for STM32 compatibility by Daniel Mako
 // **********************************************************************************
 
 #include <stdint.h>
@@ -137,13 +138,6 @@ void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID) {
 					/* 0x6F */{ REG_TESTDAGC, RF_DAGC_IMPROVED_LOWBETA0 }, // run DAGC continuously in RX mode for Fading Margin Improvement, recommended default for AfcLowBetaOn=0
 					{ 255, 0 } };
 
-	//spi_init();                // spi initialize
-	//DDRC |= 1<<PC6;          // temporary for testing LED output
-	//SS_DDR |= 1<<SS_PIN;       // setting SS as output
-	//SS_PORT |= 1<<SS_PIN;      // setting slave select high
-	//INT_DDR &= ~(1<<INT_PIN_n);  // setting interrupt pin input. no problem if not given
-	//INT_PORT &= ~(1<<INT_PIN_n); // setting pull down. because rising will cause interrupt. external pull down is needed.
-
 	while (readReg(REG_SYNCVALUE1) != 0xaa) {
 		writeReg(REG_SYNCVALUE1, 0xaa);
 	}
@@ -164,11 +158,8 @@ void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID) {
 	while ((readReg(REG_IRQFLAGS1) & RF_IRQFLAGS1_MODEREADY) == 0x00)
 		;
 
-	//EICRn |= (1 << ISCn1) | (1 << ISCn0); // setting INTn rising. details datasheet p91. must change with interrupt pin.
-	//EIMSK |= 1 << INTn;               // enable INTn
 	inISR = 0;
 	sei();                        //not needed because sei() called in millis_init() :)
-	//millis_init();                  // to get miliseconds
 
 	address = nodeID;
 	setAddress(address);            // setting this node id
