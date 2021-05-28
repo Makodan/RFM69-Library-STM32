@@ -1,7 +1,9 @@
 # RFM69-Library-AVR #
-Original library is written for arduino by [LowPowerLab](https://github.com/LowPowerLab/RFM69). This is C ported version for AVR microcontrollers.
+Original library is written for arduino by [LowPowerLab](https://github.com/LowPowerLab/RFM69).
+The AVR based library can be found: https://github.com/nayem-cosmic/RFM69-Library-AVR
 
-Tested on ATmega64, ATmega328, ATtiny84.
+The AVR based library has been modified for STM32 compatibility.
+Tested on STM32F103C8.
 
 </br>
 
@@ -16,6 +18,37 @@ Tested on ATmega64, ATmega328, ATtiny84.
 | DIO0 | Any interrupt enabled pin |
 
 </br>
+
+## Functions need to be implemented: ##
+
+void spi_transfer_sync(uint8_t *dataout, uint8_t *datain, uint8_t len);
+Shift full array through target device.
+
+void spi_transmit_sync(uint8_t *dataout, uint8_t len);
+Shift full array to target device without receiving any byte.
+ 
+uint8_t spi_fast_shift(uint8_t data);
+Clocks only one byte to target device and returns the received one.
+
+uint32_t millis();
+Return with the millisecs. It can be done by a timer or by the ticks.
+
+void select();
+Enable SPI transfer. (Negated logic - Pulled LOW means selection)
+
+void unselect();
+Disable SPI transfer. (Negated logic - Pulled HIGH means unselection)
+
+void cli();
+Disable the interrupt of the RFM69 pin. 
+
+void sei();
+Enable the interrupt of the RFM69 pin. 
+
+void reset_rfm69(void); OPTIONAL
+Reset the RFM69 modul via its reset pin.
+
+These functions have to be externed, to make possible the function call by the library.
 
 ## Function Description: ##
 
