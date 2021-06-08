@@ -1,4 +1,4 @@
-# RFM69-Library-AVR #
+# RFM69-Library-STM32 #
 Original library is written for arduino by [LowPowerLab](https://github.com/LowPowerLab/RFM69).
 
 The AVR based library can be found: [RFM69-Library-AVR](https://github.com/nayem-cosmic/RFM69-Library-AVR).
