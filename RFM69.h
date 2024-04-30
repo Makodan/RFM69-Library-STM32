@@ -53,8 +53,7 @@
 #define RFM69_CTL_SENDACK   0x80
 #define RFM69_CTL_REQACK    0x40
 
-// Global Variables
-volatile uint8_t DATA[RF69_MAX_DATA_LEN+1];  // RX/TX payload buffer, including end of string NULL char
+
 
 // Function Declerations
 void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID);

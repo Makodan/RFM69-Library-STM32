@@ -32,7 +32,8 @@
 #include <stdint.h>
 #include "RFM69registers.h"
 #include "RFM69.h"
-
+// Global Variables
+volatile uint8_t DATA[RF69_MAX_DATA_LEN+1];  // RX/TX payload buffer, including end of string NULL char
 volatile uint8_t DATALEN;
 volatile uint8_t SENDERID;
 volatile uint8_t TARGETID;                 // should match _address
