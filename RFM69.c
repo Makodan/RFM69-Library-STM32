@@ -224,11 +224,48 @@ void sendACK(const void *buffer, uint8_t bufferSize) {
 // this function implements 2 modes as follows:
 //       - for RFM69W the range is from 0-31 [-18dBm to 13dBm] (PA0 only on RFIO pin)
 //       - for RFM69HW the range is from 0-31 [5dBm to 20dBm]  (PA1 & PA2 on PA_BOOST pin & high Power PA settings - see section 3.3.7 in datasheet, p22)
-void setPowerLevel(uint8_t powerLevel) {
+/*void setPowerLevel(uint8_t powerLevel) {
 	uint8_t _powerLevel = powerLevel;
 	if (isRFM69HW == 1)
 		_powerLevel /= 2;
 	writeReg(REG_PALEVEL, (readReg(REG_PALEVEL) & 0xE0) | _powerLevel);
+}*/
+
+//   - for RFM69 W/CW the range is from 0-31 [-18dBm to 13dBm] (PA0 only on RFIO pin)
+//   - for RFM69 HW/HCW the range is from 0-22 [-2dBm to 20dBm]  (PA1 & PA2 on PA_BOOST pin & high Power PA settings - see section 3.3.7 in datasheet, p22)
+//   - the HW/HCW 0-24 range is split into 3 REG_PALEVEL parts:
+//     -  0-15 = REG_PALEVEL 16-31, ie [-2 to 13dBm] & PA1 only
+//     - 16-19 = REG_PALEVEL 26-29, ie [12 to 15dBm] & PA1+PA2
+//     - 20-23 = REG_PALEVEL 28-31, ie [17 to 20dBm] & PA1+PA2+HiPower (HiPower is only enabled before going in TX mode, ie by setMode(RF69_MODE_TX)
+// The HW/HCW range overlaps are to smooth out transitions between the 3 PA domains, based on actual current/RSSI measurements
+// Any changes to this function also demand changes in dependent function setPowerDBm()
+void setPowerLevel(uint8_t powerLevel_new) {
+  uint8_t PA_SETTING;
+  if (isRFM69HW == 1) {
+    if (powerLevel_new>23) powerLevel_new = 23;
+    powerLevel =  powerLevel_new;
+
+    //now set Pout value & active PAs based on _powerLevel range as outlined in summary above
+    if (powerLevel < 16) {
+    	powerLevel_new += 16;
+      PA_SETTING = RF_PALEVEL_PA1_ON; // enable PA1 only
+    } else {
+      if (powerLevel < 20)
+    	  powerLevel_new += 10;
+      else
+    	  powerLevel_new += 8;
+      PA_SETTING = RF_PALEVEL_PA1_ON | RF_PALEVEL_PA2_ON; // enable PA1+PA2
+    }
+    setHighPowerRegs(1); //always call this in case we're crossing power boundaries in TX mode
+  } else { //this is a W/CW, register value is the same as _powerLevel
+    if (powerLevel_new>31) powerLevel_new = 31;
+    powerLevel =  powerLevel_new;
+    PA_SETTING = RF_PALEVEL_PA0_ON; // enable PA0 only
+  }
+
+  //write value to REG_PALEVEL
+  writeReg(REG_PALEVEL, PA_SETTING | powerLevel_new);
+
 }
 
 //put transceiver in sleep mode to save battery - to wake or resume receiving just call receiveDone()
@@ -339,8 +376,35 @@ void setMode(uint8_t newMode) {
 	mode = newMode;
 }
 
-// internal function
+//Set TX Output power in dBm:
+// [-18..+13]dBm in RFM69 W/CW
+// [ -2..+20]dBm in RFM69 HW/HCW
+int8_t setPowerDBm(int8_t dBm) {
+  if (isRFM69HW == 1) {
+    //fix any out of bounds
+    if (dBm<-2) dBm=-2;
+    else if (dBm>20) dBm=20;
+
+    //map dBm to _powerLevel according to implementation in setPowerLevel()
+    if (dBm<17) setPowerLevel(2+dBm);
+    //else if (dBm<16) setPowerLevel(4+dBm);
+    else setPowerLevel(3+dBm);
+  } else { //W/CW
+    if (dBm<-18) dBm=-18;
+    else if (dBm>13) dBm=13;
+  }
+  return dBm;
+}
+
+// internal function - for HW/HCW only:
+// enables HiPower for 18-20dBm output
+// should only be used with PA1+PA2
 void setHighPowerRegs(uint8_t onOff) {
+
+	if (isRFM69HW != 1 || powerLevel<20){
+		onOff=0;
+	}
+
 	if (onOff == 1) {
 		writeReg(REG_TESTPA1, 0x5D);
 		writeReg(REG_TESTPA2, 0x7C);
@@ -349,6 +413,8 @@ void setHighPowerRegs(uint8_t onOff) {
 		writeReg(REG_TESTPA2, 0x70);
 	}
 }
+
+
 
 // for RFM69HW only: you must call setHighPower(1) after rfm69_init() or else transmission won't work
 void setHighPower(uint8_t onOff) {

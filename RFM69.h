@@ -80,6 +80,7 @@ uint8_t readReg(uint8_t addr);
 void writeReg(uint8_t addr, uint8_t val);
 void sendFrame(uint8_t toAddress, const void* buffer, uint8_t size, uint8_t requestACK, uint8_t sendACK);
 void setMode(uint8_t mode);
+int8_t setPowerDBm(int8_t dBm);
 void setHighPowerRegs(uint8_t onOff);
 void promiscuous(uint8_t onOff);
 void maybeInterrupts();
