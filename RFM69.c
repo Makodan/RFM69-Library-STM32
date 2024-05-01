@@ -33,7 +33,7 @@
 #include "RFM69registers.h"
 #include "RFM69.h"
 // Global Variables
-volatile uint8_t DATA[RF69_MAX_DATA_LEN+1];  // RX/TX payload buffer, including end of string NULL char
+volatile uint8_t DATA[RF69_MAX_DATA_LEN + 1]; // RX/TX payload buffer, including end of string NULL char
 volatile uint8_t DATALEN;
 volatile uint8_t SENDERID;
 volatile uint8_t TARGETID;                 // should match _address
@@ -43,9 +43,11 @@ volatile uint8_t ACK_RECEIVED; // should be polled immediately after sending a p
 volatile int16_t RSSI; // most accurate RSSI during reception (closest to the reception)
 volatile uint8_t mode = RF69_MODE_STANDBY; // should be protected?
 volatile uint8_t inISR = 0;
+volatile uint8_t last_tx_RSSI = 0;
 uint8_t isRFM69HW = 1;    // if RFM69HW model matches high power enable possible
 uint8_t address;                           //nodeID
 uint8_t powerLevel = 31;
+uint8_t transmitLevelStep = 1;
 uint8_t promiscuousMode = 0;
 uint32_t millis_current;
 
@@ -63,9 +65,9 @@ void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID) {
 			{
 			/* 0x01 */{ REG_OPMODE, RF_OPMODE_SEQUENCER_ON
 					| RF_OPMODE_LISTEN_OFF | RF_OPMODE_STANDBY },
-			/* 0x02 */{ REG_DATAMODUL, RF_DATAMODUL_DATAMODE_PACKET
-					| RF_DATAMODUL_MODULATIONTYPE_FSK
-					| RF_DATAMODUL_MODULATIONSHAPING_00 }, // no shaping
+					/* 0x02 */{ REG_DATAMODUL, RF_DATAMODUL_DATAMODE_PACKET
+							| RF_DATAMODUL_MODULATIONTYPE_FSK
+							| RF_DATAMODUL_MODULATIONSHAPING_00 }, // no shaping
 					/* 0x03 */{ REG_BITRATEMSB, RF_BITRATEMSB_55555 }, // default: 4.8 KBPS
 					/* 0x04 */{ REG_BITRATELSB, RF_BITRATELSB_55555 },
 					/* 0x05 */{ REG_FDEVMSB, RF_FDEVMSB_50000 }, // default: 5KHz, (FDEV + BitRate / 2 <= 500KHz)
@@ -129,12 +131,10 @@ void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID) {
 					/* 0x38 */{ REG_PAYLOADLENGTH, 66 }, // in variable length mode: the max frame size, not used in TX
 					///* 0x39 */ { REG_NODEADRS, nodeID }, // turned off because we're not using address filtering
 					/* 0x3C */{ REG_FIFOTHRESH,
-							RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY
-									| RF_FIFOTHRESH_VALUE }, // TX on FIFO not empty
+					RF_FIFOTHRESH_TXSTART_FIFONOTEMPTY | RF_FIFOTHRESH_VALUE }, // TX on FIFO not empty
 					/* 0x3D */{ REG_PACKETCONFIG2,
-							RF_PACKET2_RXRESTARTDELAY_2BITS
-									| RF_PACKET2_AUTORXRESTART_ON
-									| RF_PACKET2_AES_OFF }, // RXRESTARTDELAY must match transmitter PA ramp-down time (bitrate dependent)
+					RF_PACKET2_RXRESTARTDELAY_2BITS
+							| RF_PACKET2_AUTORXRESTART_ON | RF_PACKET2_AES_OFF }, // RXRESTARTDELAY must match transmitter PA ramp-down time (bitrate dependent)
 					//for BR-19200: /* 0x3D */ { REG_PACKETCONFIG2, RF_PACKET2_RXRESTARTDELAY_NONE | RF_PACKET2_AUTORXRESTART_ON | RF_PACKET2_AES_OFF }, // RXRESTARTDELAY must match transmitter PA ramp-down time (bitrate dependent)
 					/* 0x6F */{ REG_TESTDAGC, RF_DAGC_IMPROVED_LOWBETA0 }, // run DAGC continuously in RX mode for Fading Margin Improvement, recommended default for AfcLowBetaOn=0
 					{ 255, 0 } };
@@ -160,7 +160,7 @@ void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID) {
 		;
 
 	inISR = 0;
-	sei();                        //not needed because sei() called in millis_init() :)
+	sei();                 //not needed because sei() called in millis_init() :)
 
 	address = nodeID;
 	setAddress(address);            // setting this node id
@@ -225,11 +225,11 @@ void sendACK(const void *buffer, uint8_t bufferSize) {
 //       - for RFM69W the range is from 0-31 [-18dBm to 13dBm] (PA0 only on RFIO pin)
 //       - for RFM69HW the range is from 0-31 [5dBm to 20dBm]  (PA1 & PA2 on PA_BOOST pin & high Power PA settings - see section 3.3.7 in datasheet, p22)
 /*void setPowerLevel(uint8_t powerLevel) {
-	uint8_t _powerLevel = powerLevel;
-	if (isRFM69HW == 1)
-		_powerLevel /= 2;
-	writeReg(REG_PALEVEL, (readReg(REG_PALEVEL) & 0xE0) | _powerLevel);
-}*/
+ uint8_t _powerLevel = powerLevel;
+ if (isRFM69HW == 1)
+ _powerLevel /= 2;
+ writeReg(REG_PALEVEL, (readReg(REG_PALEVEL) & 0xE0) | _powerLevel);
+ }*/
 
 //   - for RFM69 W/CW the range is from 0-31 [-18dBm to 13dBm] (PA0 only on RFIO pin)
 //   - for RFM69 HW/HCW the range is from 0-22 [-2dBm to 20dBm]  (PA1 & PA2 on PA_BOOST pin & high Power PA settings - see section 3.3.7 in datasheet, p22)
@@ -240,31 +240,33 @@ void sendACK(const void *buffer, uint8_t bufferSize) {
 // The HW/HCW range overlaps are to smooth out transitions between the 3 PA domains, based on actual current/RSSI measurements
 // Any changes to this function also demand changes in dependent function setPowerDBm()
 void setPowerLevel(uint8_t powerLevel_new) {
-  uint8_t PA_SETTING;
-  if (isRFM69HW == 1) {
-    if (powerLevel_new>23) powerLevel_new = 23;
-    powerLevel =  powerLevel_new;
+	uint8_t PA_SETTING;
+	if (isRFM69HW == 1) {
+		if (powerLevel_new > 23)
+			powerLevel_new = 23;
+		powerLevel = powerLevel_new;
 
-    //now set Pout value & active PAs based on _powerLevel range as outlined in summary above
-    if (powerLevel < 16) {
-    	powerLevel_new += 16;
-      PA_SETTING = RF_PALEVEL_PA1_ON; // enable PA1 only
-    } else {
-      if (powerLevel < 20)
-    	  powerLevel_new += 10;
-      else
-    	  powerLevel_new += 8;
-      PA_SETTING = RF_PALEVEL_PA1_ON | RF_PALEVEL_PA2_ON; // enable PA1+PA2
-    }
-    setHighPowerRegs(1); //always call this in case we're crossing power boundaries in TX mode
-  } else { //this is a W/CW, register value is the same as _powerLevel
-    if (powerLevel_new>31) powerLevel_new = 31;
-    powerLevel =  powerLevel_new;
-    PA_SETTING = RF_PALEVEL_PA0_ON; // enable PA0 only
-  }
+		//now set Pout value & active PAs based on _powerLevel range as outlined in summary above
+		if (powerLevel < 16) {
+			powerLevel_new += 16;
+			PA_SETTING = RF_PALEVEL_PA1_ON; // enable PA1 only
+		} else {
+			if (powerLevel < 20)
+				powerLevel_new += 10;
+			else
+				powerLevel_new += 8;
+			PA_SETTING = RF_PALEVEL_PA1_ON | RF_PALEVEL_PA2_ON; // enable PA1+PA2
+		}
+		setHighPowerRegs(1); //always call this in case we're crossing power boundaries in TX mode
+	} else { //this is a W/CW, register value is the same as _powerLevel
+		if (powerLevel_new > 31)
+			powerLevel_new = 31;
+		powerLevel = powerLevel_new;
+		PA_SETTING = RF_PALEVEL_PA0_ON; // enable PA0 only
+	}
 
-  //write value to REG_PALEVEL
-  writeReg(REG_PALEVEL, PA_SETTING | powerLevel_new);
+	//write value to REG_PALEVEL
+	writeReg(REG_PALEVEL, PA_SETTING | powerLevel_new);
 
 }
 
@@ -380,20 +382,26 @@ void setMode(uint8_t newMode) {
 // [-18..+13]dBm in RFM69 W/CW
 // [ -2..+20]dBm in RFM69 HW/HCW
 int8_t setPowerDBm(int8_t dBm) {
-  if (isRFM69HW == 1) {
-    //fix any out of bounds
-    if (dBm<-2) dBm=-2;
-    else if (dBm>20) dBm=20;
+	if (isRFM69HW == 1) {
+		//fix any out of bounds
+		if (dBm < -2)
+			dBm = -2;
+		else if (dBm > 20)
+			dBm = 20;
 
-    //map dBm to _powerLevel according to implementation in setPowerLevel()
-    if (dBm<17) setPowerLevel(2+dBm);
-    //else if (dBm<16) setPowerLevel(4+dBm);
-    else setPowerLevel(3+dBm);
-  } else { //W/CW
-    if (dBm<-18) dBm=-18;
-    else if (dBm>13) dBm=13;
-  }
-  return dBm;
+		//map dBm to _powerLevel according to implementation in setPowerLevel()
+		if (dBm < 17)
+			setPowerLevel(2 + dBm);
+		//else if (dBm<16) setPowerLevel(4+dBm);
+		else
+			setPowerLevel(3 + dBm);
+	} else { //W/CW
+		if (dBm < -18)
+			dBm = -18;
+		else if (dBm > 13)
+			dBm = 13;
+	}
+	return dBm;
 }
 
 // internal function - for HW/HCW only:
@@ -401,8 +409,8 @@ int8_t setPowerDBm(int8_t dBm) {
 // should only be used with PA1+PA2
 void setHighPowerRegs(uint8_t onOff) {
 
-	if (isRFM69HW != 1 || powerLevel<20){
-		onOff=0;
+	if (isRFM69HW != 1 || powerLevel < 20) {
+		onOff = 0;
 	}
 
 	if (onOff == 1) {
@@ -414,21 +422,22 @@ void setHighPowerRegs(uint8_t onOff) {
 	}
 }
 
-
-
 // for RFM69HW only: you must call setHighPower(1) after rfm69_init() or else transmission won't work
 void setHighPower(uint8_t onOff) {
 	isRFM69HW = onOff;
 	writeReg(REG_OCP, isRFM69HW ? RF_OCP_OFF : RF_OCP_ON);
+	setPowerLevel(powerLevel);
 
-	if (isRFM69HW == 1) // turning ON
-		writeReg(REG_PALEVEL,
-				(readReg(REG_PALEVEL) & 0x1F) | RF_PALEVEL_PA1_ON
-						| RF_PALEVEL_PA2_ON); // enable P1 & P2 amplifier stages
-	else
-		writeReg(REG_PALEVEL,
-				RF_PALEVEL_PA0_ON | RF_PALEVEL_PA1_OFF | RF_PALEVEL_PA2_OFF
-						| powerLevel); // enable P0 only
+	/*
+	 if (isRFM69HW == 1) // turning ON
+	 writeReg(REG_PALEVEL,
+	 (readReg(REG_PALEVEL) & 0x1F) | RF_PALEVEL_PA1_ON
+	 | RF_PALEVEL_PA2_ON); // enable P1 & P2 amplifier stages
+	 else
+	 writeReg(REG_PALEVEL,
+	 RF_PALEVEL_PA0_ON | RF_PALEVEL_PA1_OFF | RF_PALEVEL_PA2_OFF
+	 | powerLevel); // enable P0 only
+	 */
 }
 
 // get the received signal strength indicator (RSSI)
@@ -510,6 +519,31 @@ uint8_t sendWithRetry(uint8_t toAddress, const void *buffer, uint8_t bufferSize,
 			}
 		}
 	}
+	return 0;
+}
+
+// sendWithRetry_APC - this function increases the power level in each iteration, if the message is not received by the receiver
+uint8_t sendWithRetry_APC(uint8_t toAddress, const void *buffer,
+		uint8_t bufferSize, uint8_t retries, uint8_t retryWaitTime) {
+	uint8_t maxLevel;
+	if (isRFM69HW == 1) {
+		maxLevel = 23;
+	} else {
+		maxLevel = 31;
+	}
+	for (uint8_t i = 0; i <= retries; i++) {
+			send(toAddress, buffer, bufferSize, 1);
+			millis_current = millis();
+			while (millis() - millis_current < retryWaitTime) {
+				if (ACKReceived(toAddress)) {
+					last_tx_RSSI = DATA[0];
+					return 1;
+				}
+			}
+			if (powerLevel < maxLevel) {
+				setPowerLevel(powerLevel + transmitLevelStep);
+			}
+		}
 	return 0;
 }
 
