@@ -62,6 +62,7 @@ void setNetwork(uint8_t networkID);
 uint8_t canSend();
 void send(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t requestACK);
 uint8_t sendWithRetry(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t retries, uint8_t retryWaitTime);
+uint8_t sendWithRetry_APC(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t retries, uint8_t retryWaitTime);
 uint8_t ACKRequested();
 uint8_t ACKReceived(uint8_t fromNodeID);
 void receiveBegin();
@@ -73,6 +74,7 @@ void encrypt(const char* key);
 int16_t readRSSI(uint8_t forceTrigger);
 void setHighPower(uint8_t onOFF);           // has to be called after initialize() for RFM69HW
 void setPowerLevel(uint8_t level);            // reduce/increase transmit power level
+uint8_t getPowerLevel(void);					//get current power level
 void sleep();
 uint8_t readTemperature(uint8_t calFactor); // get CMOS temperature (8bit)
 void rcCalibration();                         // calibrate the internal RC oscillator for use in wide temperature variations - see datasheet section [4.3.5. RC Timer Accuracy]

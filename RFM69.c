@@ -270,6 +270,10 @@ void setPowerLevel(uint8_t powerLevel_new) {
 
 }
 
+uint8_t getPowerLevel(void){
+	return powerLevel;
+}
+
 //put transceiver in sleep mode to save battery - to wake or resume receiving just call receiveDone()
 void sleep() {
 	setMode(RF69_MODE_SLEEP);
@@ -546,6 +550,9 @@ uint8_t sendWithRetry_APC(uint8_t toAddress, const void *buffer,
 		}
 	return 0;
 }
+
+
+
 
 // should be polled immediately after sending a packet with ACK request
 uint8_t ACKReceived(uint8_t fromNodeID) {
