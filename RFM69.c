@@ -672,8 +672,9 @@ void rfm69_ISR(void) {
 		if (DATALEN < RF69_MAX_DATA_LEN)
 			DATA[DATALEN] = 0; // add null at end of string
 		unselect();
+		RSSI = readRSSI(0);
 		setMode(RF69_MODE_RX);
 	}
-	RSSI = readRSSI(0);
+	//RSSI = readRSSI(0);
 	inISR = 0;
 }
