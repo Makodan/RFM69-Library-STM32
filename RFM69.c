@@ -44,12 +44,14 @@ volatile int16_t RSSI; // most accurate RSSI during reception (closest to the re
 volatile uint8_t mode = RF69_MODE_STANDBY; // should be protected?
 volatile uint8_t inISR = 0;
 volatile uint8_t last_tx_RSSI = 0;
+volatile int16_t last_received_ack_RSSI = 0;
 uint8_t isRFM69HW = 1;    // if RFM69HW model matches high power enable possible
 uint8_t address;                           //nodeID
 uint8_t powerLevel = 31;
-uint8_t transmitLevelStep = 1;
+uint8_t transmitLevelStep = 0;
 uint8_t promiscuousMode = 0;
 uint32_t millis_current;
+uint8_t ACK_RSSI_enabled = 0;	//if enabled recipient RSSI is received via the ACK packet DATA[0]
 
 // External functions which shall be implemented outside of the library
 extern void spi_transfer_sync(uint8_t *dataout, uint8_t *datain, uint8_t len);
@@ -216,6 +218,21 @@ void sendACK(const void *buffer, uint8_t bufferSize) {
 	sendFrame(sender, buffer, bufferSize, 0, 1);
 	RSSI = _RSSI; // restore payload RSSI
 }
+
+
+//setting the ACK_RSSI enabled(1) or disabled(1), if enabled recipient RSSI is received via the ACK packet DATA[0]
+void set_ACK_RSSI_enabled(uint8_t enabled){
+
+	ACK_RSSI_enabled = enabled;
+	return;
+}
+//getting the ACK_RSSI enabled(1) or disabled(1) status
+uint8_t get_ACK_RSSI_enabled(void){
+
+	return ACK_RSSI_enabled;
+}
+
+
 
 // set *transmit/TX* output power: 0=min, 31=max
 // this results in a "weaker" transmitted signal, and directly results in a lower RSSI at the receiver
@@ -540,7 +557,10 @@ uint8_t sendWithRetry_APC(uint8_t toAddress, const void *buffer,
 			millis_current = millis();
 			while (millis() - millis_current < retryWaitTime) {
 				if (ACKReceived(toAddress)) {
+					if (ACK_RSSI_enabled == 1){
 					last_tx_RSSI = DATA[0];
+					}
+					last_received_ack_RSSI = RSSI;
 					return 1;
 				}
 			}

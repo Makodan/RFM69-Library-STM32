@@ -68,6 +68,8 @@ uint8_t ACKReceived(uint8_t fromNodeID);
 void receiveBegin();
 uint8_t receiveDone();
 void sendACK(const void* buffer, uint8_t bufferSize);
+void set_ACK_RSSI_enabled(uint8_t enabled);
+uint8_t get_ACK_RSSI_enabled(void);
 uint32_t getFrequency();
 void setFrequency(uint32_t freqHz);
 void encrypt(const char* key);
