@@ -4,7 +4,7 @@ Original library is written for arduino by [LowPowerLab](https://github.com/LowP
 The AVR based library can be found: [RFM69-Library-AVR](https://github.com/nayem-cosmic/RFM69-Library-AVR).
 
 The AVR based library has been modified for STM32 compatibility.
-Tested on STM32F103C8.
+Tested on STM32F103C8 and on STM32L031F6P6.
 
 </br>
 
