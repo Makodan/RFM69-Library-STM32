@@ -43,12 +43,12 @@ volatile uint8_t ACK_RECEIVED; // should be polled immediately after sending a p
 volatile int16_t RSSI; // most accurate RSSI during reception (closest to the reception)
 volatile uint8_t mode = RF69_MODE_STANDBY; // should be protected?
 volatile uint8_t inISR = 0;
-volatile uint8_t last_tx_RSSI = 0;
+volatile uint8_t last_tx_RSSI = 0; // 0 means no valid value
 volatile int16_t last_received_ack_RSSI = 0;
 uint8_t isRFM69HW = 1;    // if RFM69HW model matches high power enable possible
 uint8_t address;                           //nodeID
 uint8_t powerLevel = 31;
-uint8_t transmitLevelStep = 0;
+uint8_t transmitLevelStep = 1;
 uint8_t promiscuousMode = 0;
 uint32_t millis_current;
 uint8_t ACK_RSSI_enabled = 0;	//if enabled recipient RSSI is received via the ACK packet DATA[0]
