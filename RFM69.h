@@ -35,6 +35,8 @@
 #ifndef RFM69_h
 #define RFM69_h
 
+#include <stdint.h>
+
 // Definitions
 #define RF69_MAX_DATA_LEN       61  // to take advantage of the built in AES/CRC we want to limit the frame size to the internal FIFO size (66 bytes - 3 bytes overhead - 2 bytes crc)
 #define CSMA_LIMIT             -90 // upper RX signal sensitivity threshold in dBm for carrier sense access
@@ -46,8 +48,26 @@
 #define null                  0
 #define COURSE_TEMP_COEF    -90     // puts the temperature reading in the ballpark, user can fine tune the returned value
 #define RF69_BROADCAST_ADDR   0
+
+// Timeouts of the blocking waits, they can be overridden before including this header (e.g. with -D).
+// Worst case blocking time of send(): RF69_CSMA_LIMIT_MS + RF69_MODE_READY_TIMEOUT_MS + RF69_TX_LIMIT_MS,
+// a watchdog of the application has to tolerate this (multiplied by retries+1 for sendWithRetry()).
+#ifndef RF69_CSMA_LIMIT_MS
 #define RF69_CSMA_LIMIT_MS 1000
-#define RF69_TX_LIMIT_MS   1000
+#endif
+#ifndef RF69_TX_LIMIT_MS
+#define RF69_TX_LIMIT_MS   1000 // longest packet (65 bytes) takes ~0.5s at 1.2kbps
+#endif
+#ifndef RF69_INIT_TIMEOUT_MS
+#define RF69_INIT_TIMEOUT_MS 50 // SPI communication check in rfm69_init()
+#endif
+#ifndef RF69_MODE_READY_TIMEOUT_MS
+#define RF69_MODE_READY_TIMEOUT_MS 50 // ModeReady after mode change (XO startup from sleep, PLL lock)
+#endif
+#ifndef RF69_MEASURE_TIMEOUT_MS
+#define RF69_MEASURE_TIMEOUT_MS 50 // RSSI, temperature and RC calibration measurements
+#endif
+
 #define RF69_FSTEP    61.03515625   // == FXOSC / 2^19 = 32MHz / 2^19 (p13 in datasheet) / FXOSC = module crystal oscillator frequency 
 // TWS: define CTLbyte bits
 #define RFM69_CTL_SENDACK   0x80
@@ -56,18 +76,20 @@
 
 
 // Function Declerations
-void rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID);
+uint8_t rfm69_init(uint16_t freqBand, uint8_t nodeID, uint8_t networkID); // returns 0 if the radio doesn't respond
+uint8_t rfm69_isConfigured(void);	// returns 0 if the radio lost its configuration (reset/brown-out), re-init needed
+void rfm69_ISR(void);				// call it from the DIO0 rising edge interrupt
 void setAddress(uint8_t addr);
 void setNetwork(uint8_t networkID);
 uint8_t canSend();
-void send(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t requestACK);
+uint8_t send(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t requestACK); // returns 0 on TX timeout
 uint8_t sendWithRetry(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t retries, uint8_t retryWaitTime);
 uint8_t sendWithRetry_APC(uint8_t toAddress, const void* buffer, uint8_t bufferSize, uint8_t retries, uint8_t retryWaitTime);
 uint8_t ACKRequested();
 uint8_t ACKReceived(uint8_t fromNodeID);
 void receiveBegin();
 uint8_t receiveDone();
-void sendACK(const void* buffer, uint8_t bufferSize);
+uint8_t sendACK(const void* buffer, uint8_t bufferSize); // returns 0 on TX timeout
 void set_ACK_RSSI_enabled(uint8_t enabled);
 uint8_t get_ACK_RSSI_enabled(void);
 uint32_t getFrequency();
@@ -77,12 +99,14 @@ int16_t readRSSI(uint8_t forceTrigger);
 void setHighPower(uint8_t onOFF);           // has to be called after initialize() for RFM69HW
 void setPowerLevel(uint8_t level);            // reduce/increase transmit power level
 uint8_t getPowerLevel(void);					//get current power level
+void setMaxPowerLevel(uint8_t level);         // upper limit for setPowerLevel() and sendWithRetry_APC(), e.g. for legal limits
+uint8_t getMaxPowerLevel(void);
 void sleep();
 uint8_t readTemperature(uint8_t calFactor); // get CMOS temperature (8bit)
 void rcCalibration();                         // calibrate the internal RC oscillator for use in wide temperature variations - see datasheet section [4.3.5. RC Timer Accuracy]
 uint8_t readReg(uint8_t addr);
 void writeReg(uint8_t addr, uint8_t val);
-void sendFrame(uint8_t toAddress, const void* buffer, uint8_t size, uint8_t requestACK, uint8_t sendACK);
+uint8_t sendFrame(uint8_t toAddress, const void* buffer, uint8_t size, uint8_t requestACK, uint8_t sendACK);
 void setMode(uint8_t mode);
 int8_t setPowerDBm(int8_t dBm);
 void setHighPowerRegs(uint8_t onOff);
@@ -91,7 +115,6 @@ void maybeInterrupts();
 void select();
 void unselect();
 uint8_t receiveDone();
-void rfm69_ISR(void);
 
 #endif
 
