@@ -91,6 +91,7 @@ void maybeInterrupts();
 void select();
 void unselect();
 uint8_t receiveDone();
+void rfm69_ISR(void);
 
 #endif
 
